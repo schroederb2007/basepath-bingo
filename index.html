@@ -3,7 +3,6 @@
 <head>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Basepath Bingo</title>
-
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap');
 
@@ -15,9 +14,7 @@
       background: #fafafa;
     }
 
-    h1, h2, h3 {
-      margin-top: 0;
-    }
+    h1, h2, h3 { margin-top: 0; }
 
     .card {
       background: #f2f2f2;
@@ -30,7 +27,7 @@
 
     .join-box {
       max-width: 420px;
-      margin: 40px auto;
+      margin: 20px auto;
       background: white;
       border-radius: 12px;
       padding: 24px;
@@ -144,6 +141,7 @@
       font-size: 12px;
       position: relative;
       box-sizing: border-box;
+      user-select: none;
     }
 
     .available {
@@ -157,6 +155,7 @@
       background: #28a745;
       color: white;
       opacity: 1;
+      cursor: pointer;
     }
 
     .line {
@@ -167,9 +166,7 @@
       pointer-events: none;
     }
 
-    .hidden {
-      display: none;
-    }
+    .hidden { display: none; }
 
     .modal {
       position: fixed;
@@ -182,16 +179,20 @@
       align-items: center;
       padding: 20px;
       box-sizing: border-box;
+      z-index: 9999;
     }
 
     .modal-content {
-      background: white;
-      padding: 20px;
-      max-width: 420px;
-      border-radius: 10px;
-      text-align: left;
-      width: 100%;
-    }
+  background: white;
+  padding: 24px;
+  max-width: 420px;
+  width: 100%;
+  border-radius: 10px;
+  text-align: left;
+  box-sizing: border-box;
+  position: relative;
+  z-index: 10000;
+}
 
     .close {
       float: right;
@@ -200,59 +201,52 @@
     }
 
     @media (max-width: 700px) {
-      .board {
-        gap: 12px;
-      }
-
-      .column {
-        gap: 6px;
-      }
-
+      .board { gap: 12px; }
+      .column { gap: 6px; }
       .square {
         width: 70px;
         height: 50px;
         font-size: 9px;
       }
-
       .colB { margin-top: 20px; }
       .colD { margin-top: 20px; }
-
-      .section {
-        padding: 10px;
-      }
-
-      .label {
-        font-size: 18px;
-      }
+      .section { padding: 10px; }
+      .label { font-size: 18px; }
     }
   </style>
 </head>
-
 <body>
 
-<div id="joinScreen" class="join-box">
-  <h2>Join a Game</h2>
-
-  <label for="playerName">Your name</label>
-  <input id="playerName" type="text" placeholder="Enter Name">
-
-  <label for="gameCode">Game code</label>
-  <input id="gameCode" type="text" placeholder="ex. GoBrewers!">
-
-  <button id="joinBtn">Join Game</button>
-  <div class="status" id="joinStatus"></div>
-</div>
-
-<div id="appScreen" class="hidden">
+<div id="appScreen">
   <h1>Basepath Bingo</h1>
 
   <div class="topbar">
     <button onclick="openRules()">Rules</button>
-    <button id="leaveBtn">Leave Game</button>
+    <button id="newLocalBtn">New Local Game</button>
+    <button id="joinToggleBtn">Join Group Game</button>
+    <button id="resetBtn" class="hidden">Reset Game</button>
+    <button id="leaveBtn" class="hidden">Leave Group Game</button>
   </div>
 
-  <div id="gameInfo" class="card"></div>
-  <div id="winnerBanner" class="winner-banner"></div>
+  <div id="joinModal" class="modal">
+  <div class="modal-content">
+    <span class="close" onclick="closeJoin()">✖</span>
+
+    <h2>Join a Group Game</h2>
+
+    <label for="playerName">Your name</label>
+    <input id="playerName" type="text" placeholder="Bob Uecker">
+<br>
+    <label for="gameCode">Game code</label>
+    <input id="gameCode" type="text" placeholder="ex. GoBrewers!">
+
+    <button id="joinBtn">Join Game</button>
+    <div class="status" id="joinStatus"></div>
+  </div>
+</div>
+
+  <div id="modeBanner" class="card"></div>
+    <div id="winnerBanner" class="winner-banner"></div>
 
   <div class="section">
     <div class="label">Away</div>
@@ -269,19 +263,20 @@
   <div class="modal-content">
     <span class="close" onclick="closeRules()">✖</span>
     <h3>How to Play</h3>
-    <p>Click available squares to advance from left to right.</p>
+    <p>Tap available squares to advance from left to right.</p>
     <p>Only the first column is available at the start.</p>
     <p>Marking a square unlocks connected options in the next column.</p>
-    <p>Be the first to mark a square in the final column.</p>
+    <p>Tapping a marked square again removes it.</p>
+    <p>Be the first player to mark a square in the final column.</p>
+    <p style="margin-top: 15px; font-size: 14px;">
+       Inspired by <a href="http://www.baseballbingo.org/" target="_blank">baseballbingo.org</a>
+    </p>
   </div>
 </div>
 
 <script type="module">
   import { initializeApp } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-app.js";
-  import {
-    getAuth,
-    signInAnonymously
-  } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-auth.js";
   import {
     getFirestore,
     doc,
@@ -289,10 +284,14 @@
     setDoc,
     updateDoc,
     onSnapshot,
-    serverTimestamp
+    serverTimestamp,
+    collection,
+    getDocs,
+    writeBatch,
+    query
   } from "https://www.gstatic.com/firebasejs/11.10.0/firebase-firestore.js";
 
-  // PASTE YOUR FIREBASE CONFIG HERE
+  // REPLACE THESE WITH YOUR REAL FIREBASE VALUES
   const firebaseConfig = {
   apiKey: "AIzaSyB85e6C6lwFvI7KZCs5w1ay3IKsjSOHLQY",
   authDomain: "basepath-bingo.firebaseapp.com",
@@ -303,28 +302,36 @@
   measurementId: "G-M9P3W75CM5"
 };
 
-
   const app = initializeApp(firebaseConfig);
   const auth = getAuth(app);
   const db = getFirestore(app);
 
   const labels = [
-    "K Swing","K Called","Walk","Single Left","Single Center","Single Right",
+    "Strikeout Swinging","Strikeout Called","Walk","Single Left","Single Center","Single Right",
     "Single Infield","Double","Triple","Home Run","Flyout Left","Flyout Center",
-    "Flyout Right","Groundout 6-3","Groundout 4-3","Groundout 5-3",
-    "Groundout 1-3","Groundout 3-1","Unassisted 1B","Unassisted 2B",
-    "Unassisted 3B","Unassisted SS","Double Play","Stolen Base","Error",
-    "Sac Fly","Sac Bunt","HBP","Wild Pitch","Caught Stealing","Intentional Walk"
+    "Flyout Right","Groundout SS to 1B","Groundout 2B to 1B","Groundout 3B to 1B",
+    "Groundout Pitcher to 1B","Groundout 1B to Pitcher","Unassisted 1B","Unassisted 2B",
+    "Unassisted 3B","Unassisted SS","Unassisted Catcher","Unassisted Pitcher","Double Play","Stolen Base","Error",
+    "Sac Fly","Sac Bunt","Hit By Pitch","Wild Pitch","Caught Stealing", "Wild Pitch OR Passed Ball"
   ];
 
   const columns = ["A","B","C","D","E"];
   const columnSizes = { A:5, B:4, C:5, D:4, E:5 };
 
+  let mode = "local";
   let currentGameCode = "";
   let currentPlayerName = "";
   let currentUid = "";
   let unsubscribeGame = null;
+  let unsubscribePlayers = null;
+  let unsubscribeMyPlayer = null;
   let gameState = null;
+  let latestPlayers = {};
+
+  let localAwaySeed = `local-away-${Date.now()}`;
+  let localHomeSeed = `local-home-${Date.now()}`;
+  let localAwayMarked = [];
+  let localHomeMarked = [];
 
   function openRules() {
     document.getElementById("rulesModal").style.display = "flex";
@@ -353,7 +360,16 @@
       return (h ^= h >>> 16) >>> 0;
     };
   }
+function openJoin() {
+  document.getElementById("joinModal").style.display = "flex";
+}
 
+function closeJoin() {
+  document.getElementById("joinModal").style.display = "none";
+}
+
+window.openJoin = openJoin;
+window.closeJoin = closeJoin;
   function mulberry32(a) {
     return function() {
       let t = a += 0x6D2B79F5;
@@ -386,7 +402,8 @@
     });
 
     function connect(from, to) {
-      squares.find(s => s.id === to).depends.push(from);
+      const target = squares.find(s => s.id === to);
+      if (target) target.depends.push(from);
     }
 
     connect("A1","B1");
@@ -429,29 +446,63 @@
     return square.depends.some(id => markedIds.includes(id));
   }
 
-  function getWinningBoard(markedIds, boardSquares) {
+  function hasWin(markedIds, boardSquares) {
     return boardSquares.some(s => s.col === "E" && markedIds.includes(s.id));
   }
 
-  function renderGameInfo(players = {}) {
-    const names = Object.values(players).map(p => p.name).filter(Boolean);
-    const info = document.getElementById("gameInfo");
-    info.innerHTML = `
-      <div><strong>Game:</strong> ${currentGameCode}</div>
-      <div><strong>You:</strong> ${currentPlayerName}</div>
-      <div><strong>Players:</strong> ${names.length ? names.join(", ") : "Just you"}</div>
-    `;
+  function setModeBanner() {
+  const el = document.getElementById("modeBanner");
+
+  if (mode === "local") {
+    el.innerHTML = `<div><strong>Local Game</strong></div>`;
+    return;
   }
 
-  function renderWinnerBanner(game) {
+  const players = Object.entries(latestPlayers);
+
+  el.innerHTML = `
+    <div><strong>Game:</strong> ${currentGameCode}</div>
+    ${players.map(([id, p]) => `
+      <div>${p.name}${id === currentUid ? " (You)" : ""}</div>
+    `).join("")}
+  `;
+}
+
+  
+
+  function renderWinnerBanner(gameOrText = null) {
     const banner = document.getElementById("winnerBanner");
 
-    if (game.winnerName) {
+    if (mode === "local") {
+      if (typeof gameOrText === "string" && gameOrText) {
+        banner.style.display = "block";
+        banner.textContent = gameOrText;
+      } else {
+        banner.style.display = "none";
+        banner.textContent = "";
+      }
+      return;
+    }
+
+    if (gameOrText && gameOrText.winnerName) {
       banner.style.display = "block";
-      banner.textContent = `${game.winnerName} won this game.`;
+      banner.textContent = `${gameOrText.winnerName} won this game.`;
     } else {
       banner.style.display = "none";
       banner.textContent = "";
+    }
+  }
+
+  function renderButtons() {
+    
+    document.getElementById("newLocalBtn").classList.toggle("hidden", mode === "group");
+    document.getElementById("leaveBtn").classList.toggle("hidden", mode !== "group");
+
+    const resetBtn = document.getElementById("resetBtn");
+    if (mode === "group" && gameState && currentUid === gameState.createdBy) {
+      resetBtn.classList.remove("hidden");
+    } else {
+      resetBtn.classList.add("hidden");
     }
   }
 
@@ -493,7 +544,7 @@
     });
   }
 
-  function renderBoard(boardElementId, boardIdPrefix, boardSquares, markedIds, clickHandler, disableClicks) {
+  function renderBoard(boardElementId, boardIdPrefix, boardSquares, markedIds, clickHandler, disableNewClicks) {
     const boardEl = document.getElementById(boardElementId);
     boardEl.innerHTML = "";
 
@@ -511,13 +562,13 @@
 
         if (markedIds.includes(sq.id)) {
           div.classList.add("marked");
-        } else if (isAvailable(sq, markedIds) && !disableClicks) {
+        } else if (isAvailable(sq, markedIds) && !disableNewClicks) {
           div.classList.add("available");
         }
 
         div.innerText = sq.label;
 
-        if (!disableClicks) {
+        if (!disableNewClicks || markedIds.includes(sq.id)) {
           div.onclick = () => clickHandler(sq.id);
         }
 
@@ -529,6 +580,103 @@
 
     drawLines(boardEl, boardIdPrefix, boardSquares, markedIds);
   }
+
+  function renderLocalBoards() {
+    const awayBoard = buildBoardFromSeed(localAwaySeed);
+    const homeBoard = buildBoardFromSeed(localHomeSeed);
+    const localWon = hasWin(localAwayMarked, awayBoard) || hasWin(localHomeMarked, homeBoard);
+
+    renderBoard(
+      "boardAway",
+      "away-",
+      awayBoard,
+      localAwayMarked,
+      handleLocalAwayClick,
+      localWon
+    );
+
+    renderBoard(
+      "boardHome",
+      "home-",
+      homeBoard,
+      localHomeMarked,
+      handleLocalHomeClick,
+      localWon
+    );
+
+    if (localWon) {
+      renderWinnerBanner("Local game complete.");
+    } else {
+      renderWinnerBanner(null);
+    }
+  }
+
+  function handleLocalClick(markedArr, squareId, boardSquares) {
+    if (markedArr.includes(squareId)) {
+      return markedArr.filter(id => id !== squareId);
+    }
+
+    const square = boardSquares.find(s => s.id === squareId);
+    if (!square) return markedArr;
+    if (!isAvailable(square, markedArr)) return markedArr;
+
+    return [...markedArr, squareId];
+  }
+
+  function handleLocalAwayClick(squareId) {
+    const awayBoard = buildBoardFromSeed(localAwaySeed);
+    const localWon = hasWin(localAwayMarked, awayBoard) || hasWin(localHomeMarked, buildBoardFromSeed(localHomeSeed));
+    if (localWon && !localAwayMarked.includes(squareId)) return;
+
+    localAwayMarked = handleLocalClick(localAwayMarked, squareId, awayBoard);
+    renderLocalBoards();
+  }
+
+  function handleLocalHomeClick(squareId) {
+    const homeBoard = buildBoardFromSeed(localHomeSeed);
+    const localWon = hasWin(localHomeMarked, homeBoard) || hasWin(localAwayMarked, buildBoardFromSeed(localAwaySeed));
+    if (localWon && !localHomeMarked.includes(squareId)) return;
+
+    localHomeMarked = handleLocalClick(localHomeMarked, squareId, homeBoard);
+    renderLocalBoards();
+  }
+
+  function startLocalMode() {
+    mode = "local";
+    currentGameCode = "";
+    currentPlayerName = "";
+    currentUid = "";
+    gameState = null;
+    latestPlayers = {};
+
+    if (unsubscribeGame) unsubscribeGame();
+    if (unsubscribePlayers) unsubscribePlayers();
+    if (unsubscribeMyPlayer) unsubscribeMyPlayer();
+    unsubscribeGame = null;
+    unsubscribePlayers = null;
+    unsubscribeMyPlayer = null;
+
+    closeJoin();
+    document.getElementById("joinStatus").textContent = "";
+    document.getElementById("playerName").value = "";
+    document.getElementById("gameCode").value = "";
+
+    renderButtons();
+    setModeBanner();
+    renderLocalBoards();
+  }
+
+  function newLocalGame() {
+    localAwaySeed = `local-away-${Date.now()}-${Math.random()}`;
+    localHomeSeed = `local-home-${Date.now()}-${Math.random()}`;
+    localAwayMarked = [];
+    localHomeMarked = [];
+    renderLocalBoards();
+  }
+
+  function showJoinBox() {
+  openJoin();
+}
 
   async function joinGame() {
     const statusEl = document.getElementById("joinStatus");
@@ -554,13 +702,10 @@
       const gameSnap = await getDoc(gameRef);
 
       if (!gameSnap.exists()) {
-        const awaySeed = `${code}-away`;
-        const homeSeed = `${code}-home`;
-
         await setDoc(gameRef, {
           code,
-          awaySeed,
-          homeSeed,
+          awaySeed: `${code}-away`,
+          homeSeed: `${code}-home`,
           winnerId: null,
           winnerName: null,
           createdBy: currentUid,
@@ -576,138 +721,173 @@
         hasWon: false
       });
 
-      document.getElementById("joinScreen").classList.add("hidden");
-      document.getElementById("appScreen").classList.remove("hidden");
-
+      mode = "group";
+      closeJoin();
+      statusEl.textContent = "";
+      renderButtons();
+      setModeBanner();
       startListening();
     } catch (error) {
-      statusEl.textContent = "Could not join game. Check your Firebase config.";
+      statusEl.textContent = "Could not join game. Check Firebase config and auth.";
       console.error(error);
     }
   }
 
   function startListening() {
     if (unsubscribeGame) unsubscribeGame();
+    if (unsubscribePlayers) unsubscribePlayers();
+    if (unsubscribeMyPlayer) unsubscribeMyPlayer();
 
     const gameRef = doc(db, "games", currentGameCode);
+    const playersRef = query(collection(db, "games", currentGameCode, "players"));
+    const myPlayerRef = doc(db, "games", currentGameCode, "players", currentUid);
 
-    unsubscribeGame = onSnapshot(gameRef, async (gameSnap) => {
+    unsubscribeGame = onSnapshot(gameRef, (gameSnap) => {
       if (!gameSnap.exists()) return;
 
       const game = gameSnap.data();
       gameState = game;
 
-      const awayBoard = buildBoardFromSeed(game.awaySeed);
-      const homeBoard = buildBoardFromSeed(game.homeSeed);
-
-      const playersData = {};
-      const gamePlayersRefPrefix = `games/${currentGameCode}/players/`;
-
-      // Light-weight approach for now:
-      // fetch each known player using embedded map if you add one later,
-      // or just render current player info.
-      // To keep this single-file simple, we only show current player and winner state here.
-
-      renderGameInfo(playersData);
       renderWinnerBanner(game);
+      renderButtons();
+      setModeBanner();
+          });
 
-      const myPlayerRef = doc(db, "games", currentGameCode, "players", currentUid);
+    unsubscribePlayers = onSnapshot(playersRef, (snapshot) => {
+  latestPlayers = {};
+  snapshot.forEach((docSnap) => {
+    latestPlayers[docSnap.id] = docSnap.data();
+  });
 
-      onSnapshot(myPlayerRef, (playerSnap) => {
-        if (!playerSnap.exists()) return;
+  setModeBanner();   // 👈 THIS IS THE FIX
+});
 
-        const player = playerSnap.data();
-        const gameOver = !!game.winnerId;
+    unsubscribeMyPlayer = onSnapshot(myPlayerRef, (playerSnap) => {
+      if (!playerSnap.exists() || !gameState) return;
 
-        renderBoard(
-          "boardAway",
-          "away-",
-          awayBoard,
-          player.awayMarked || [],
-          (squareId) => handleSquareClick("awayMarked", awayBoard, squareId),
-          gameOver
-        );
+      const player = playerSnap.data();
+      const awayBoard = buildBoardFromSeed(gameState.awaySeed);
+      const homeBoard = buildBoardFromSeed(gameState.homeSeed);
+      const gameOver = !!gameState.winnerId;
 
-        renderBoard(
-          "boardHome",
-          "home-",
-          homeBoard,
-          player.homeMarked || [],
-          (squareId) => handleSquareClick("homeMarked", homeBoard, squareId),
-          gameOver
-        );
-      });
+      renderBoard(
+        "boardAway",
+        "away-",
+        awayBoard,
+        player.awayMarked || [],
+        (squareId) => handleGroupSquareClick("awayMarked", awayBoard, squareId),
+        gameOver
+      );
+
+      renderBoard(
+        "boardHome",
+        "home-",
+        homeBoard,
+        player.homeMarked || [],
+        (squareId) => handleGroupSquareClick("homeMarked", homeBoard, squareId),
+        gameOver
+      );
     });
   }
 
-  async function handleSquareClick(fieldName, boardSquares, squareId) {
+  async function handleGroupSquareClick(fieldName, boardSquares, squareId) {
     if (!gameState || gameState.winnerId) return;
 
     const playerRef = doc(db, "games", currentGameCode, "players", currentUid);
-    const playerSnap = await getDoc(playerRef);
-    if (!playerSnap.exists()) return;
+    const gameRef = doc(db, "games", currentGameCode);
+
+    const [playerSnap, freshGameSnap] = await Promise.all([
+      getDoc(playerRef),
+      getDoc(gameRef)
+    ]);
+
+    if (!playerSnap.exists() || !freshGameSnap.exists()) return;
+
+    const freshGame = freshGameSnap.data();
+    if (freshGame.winnerId) return;
 
     const player = playerSnap.data();
     const markedIds = [...(player[fieldName] || [])];
     const square = boardSquares.find(s => s.id === squareId);
 
     if (!square) return;
-    // toggle behavior
-if (markedIds.includes(squareId)) {
-  // remove it (undo)
-  const index = markedIds.indexOf(squareId);
-  markedIds.splice(index, 1);
 
-  await updateDoc(playerRef, {
-    [fieldName]: markedIds
-  });
+    if (markedIds.includes(squareId)) {
+      const updated = markedIds.filter(id => id !== squareId);
+      await updateDoc(playerRef, { [fieldName]: updated });
+      return;
+    }
 
-  return;
-}
     if (!isAvailable(square, markedIds)) return;
 
     markedIds.push(squareId);
+    await updateDoc(playerRef, { [fieldName]: markedIds });
 
-    const updates = { [fieldName]: markedIds };
-    const awayBoard = buildBoardFromSeed(gameState.awaySeed);
-    const homeBoard = buildBoardFromSeed(gameState.homeSeed);
+    const awayBoard = buildBoardFromSeed(freshGame.awaySeed);
+    const homeBoard = buildBoardFromSeed(freshGame.homeSeed);
 
-    const awayWin = getWinningBoard(
-      fieldName === "awayMarked" ? markedIds : (player.awayMarked || []),
-      awayBoard
-    );
+    const nextAwayMarked = fieldName === "awayMarked" ? markedIds : (player.awayMarked || []);
+    const nextHomeMarked = fieldName === "homeMarked" ? markedIds : (player.homeMarked || []);
 
-    const homeWin = getWinningBoard(
-      fieldName === "homeMarked" ? markedIds : (player.homeMarked || []),
-      homeBoard
-    );
-
-    await updateDoc(playerRef, updates);
+    const awayWin = hasWin(nextAwayMarked, awayBoard);
+    const homeWin = hasWin(nextHomeMarked, homeBoard);
 
     if (awayWin || homeWin) {
-      const gameRef = doc(db, "games", currentGameCode);
-      const freshGame = await getDoc(gameRef);
+      const latestGameSnap = await getDoc(gameRef);
+      if (!latestGameSnap.exists()) return;
 
-      if (freshGame.exists() && !freshGame.data().winnerId) {
-        await updateDoc(gameRef, {
-          winnerId: currentUid,
-          winnerName: currentPlayerName
-        });
-
-        await updateDoc(playerRef, {
-          hasWon: true
-        });
+      const latestGame = latestGameSnap.data();
+      if (!latestGame.winnerId) {
+        await Promise.all([
+          updateDoc(gameRef, {
+            winnerId: currentUid,
+            winnerName: currentPlayerName
+          }),
+          updateDoc(playerRef, {
+            hasWon: true
+          })
+        ]);
       }
     }
   }
 
-  function leaveGame() {
-    if (unsubscribeGame) unsubscribeGame();
-    location.reload();
+  async function resetGame() {
+    if (mode !== "group" || !gameState) return;
+    if (currentUid !== gameState.createdBy) return;
+
+    const playersRef = collection(db, "games", currentGameCode, "players");
+    const playersSnap = await getDocs(playersRef);
+    const gameRef = doc(db, "games", currentGameCode);
+    const batch = writeBatch(db);
+
+    playersSnap.forEach((playerDoc) => {
+      batch.update(playerDoc.ref, {
+        awayMarked: [],
+        homeMarked: [],
+        hasWon: false
+      });
+    });
+
+    batch.update(gameRef, {
+      winnerId: null,
+      winnerName: null
+    });
+
+    await batch.commit();
   }
 
+  function leaveGroupGame() {
+    startLocalMode();
+  }
+  document.getElementById("joinToggleBtn").addEventListener("click", openJoin);
   document.getElementById("joinBtn").addEventListener("click", joinGame);
-  document.getElementById("leaveBtn").addEventListener("click", leaveGame);
+  document.getElementById("newLocalBtn").addEventListener("click", newLocalGame);
+  document.getElementById("leaveBtn").addEventListener("click", leaveGroupGame);
+  document.getElementById("resetBtn").addEventListener("click", resetGame);
+
+  window.onload = () => {
+  startLocalMode();
+};
 </script>
 
 </body>
