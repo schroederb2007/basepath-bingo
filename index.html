@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Basepath Bingo</title>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Lato:wght@400;700&display=swap');
+
+    body {
+      font-family: 'Lato', Arial, sans-serif;
+      text-align: center;
+    }
+
+    .section {
+  margin: 30px auto;
+  padding: 20px;
+  background: #f2f2f2;
+  border-radius: 10px;
+  width: fit-content;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+  }
+
+    .label {
+  font-size: 22px;
+  font-weight: 700;
+  margin-bottom: 15px;
+  color: #333;
+}
+
+    .board {
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      gap: 30px;
+    }
+
+    .column {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .colB { margin-top: 40px; }
+    .colD { margin-top: 40px; }
+
+    .square {
+      border: 1px solid #333;
+      width: 110px;
+      height: 70px;
+
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      text-align: center;
+      padding: 5px;
+
+      background: #ddd;
+      opacity: 0.4;
+      font-size: 12px;
+    }
+
+    .available {
+      background: #4da6ff;
+      color: white;
+      opacity: 1;
+      cursor: pointer;
+    }
+
+    .marked {
+      background: #28a745;
+      color: white;
+      opacity: 1;
+    }
+
+    .line {
+      position: absolute;
+      height: 2px;
+      background: #333;
+      transform-origin: left center;
+    }
+  </style>
+</head>
+
+<body>
+
+<h2>Basepath Bingo</h2>
+
+<div class="section">
+  <div class="label">Away</div>
+  <div id="boardAway" class="board"></div>
+</div>
+
+<div class="section">
+  <div class="label">Home</div>
+  <div id="boardHome" class="board"></div>
+</div>
+
+<script>
+
+const labels = [
+"K Swing","K Called","Walk","Single Left","Single Center","Single Right",
+"Single Infield","Double","Triple","Home Run","Flyout Left","Flyout Center",
+"Flyout Right","Groundout 6-3","Groundout 4-3","Groundout 5-3",
+"Groundout 1-3","Groundout 3-1","Unassisted 1B","Unassisted 2B",
+"Unassisted 3B","Unassisted SS","Double Play","Stolen Base","Error",
+"Sac Fly","Sac Bunt","HBP","Wild Pitch","Caught Stealing","Intentional Walk"
+];
+
+function shuffle(arr) {
+  return arr.sort(() => Math.random() - 0.5);
+}
+
+const columns = ["A","B","C","D","E"];
+const columnSizes = { A:5, B:4, C:5, D:4, E:5 };
+
+function buildBoard() {
+  const squares = [];
+
+  columns.forEach(col => {
+    for (let i = 1; i <= columnSizes[col]; i++) {
+      squares.push({ id: col + i, col, depends: [] });
+    }
+  });
+
+  function connect(from, to) {
+    squares.find(s => s.id === to).depends.push(from);
+  }
+
+  // A → B
+  connect("A1","B1");
+  connect("A2","B1"); connect("A2","B2");
+  connect("A3","B2"); connect("A3","B3");
+  connect("A4","B3"); connect("A4","B4");
+  connect("A5","B4");
+
+  // B → C
+  connect("B1","C1"); connect("B1","C2");
+  connect("B2","C2"); connect("B2","C3");
+  connect("B3","C3"); connect("B3","C4");
+  connect("B4","C4"); connect("B4","C5");
+
+  // C → D
+  connect("C1","D1");
+  connect("C2","D1"); connect("C2","D2");
+  connect("C3","D2"); connect("C3","D3");
+  connect("C4","D3"); connect("C4","D4");
+  connect("C5","D4");
+
+  // D → E
+  connect("D1","E1"); connect("D1","E2");
+  connect("D2","E2"); connect("D2","E3");
+  connect("D3","E3"); connect("D3","E4");
+  connect("D4","E4"); connect("D4","E5");
+
+  return squares;
+}
+
+// CREATE TWO SEPARATE BOARDS
+function createGame(boardId) {
+
+  const template = buildBoard();
+  const shuffled = shuffle([...labels]);
+
+  const squares = template.map((sq, i) => ({
+    ...sq,
+    label: shuffled[i]
+  }));
+
+  let marked = new Set();
+
+  function isAvailable(sq) {
+    if (sq.col === "A") return true;
+    return sq.depends.some(id => marked.has(id));
+  }
+
+  function clickSquare(id) {
+    const sq = squares.find(s => s.id === id);
+    if (!sq) return;
+    if (!isAvailable(sq)) return;
+
+    marked.add(sq.id);
+    checkWin();
+    render();
+  }
+
+  function checkWin() {
+    const win = squares.some(s => s.col === "E" && marked.has(s.id));
+    if (win) setTimeout(() => alert(boardId + " WINS"), 100);
+  }
+
+  function drawLines(board) {
+    squares.forEach(sq => {
+      if (!marked.has(sq.id)) return;
+
+      const fromEl = document.getElementById(boardId + sq.id);
+
+      squares.forEach(target => {
+        if (!target.depends.includes(sq.id)) return;
+
+        const toEl = document.getElementById(boardId + target.id);
+
+        const line = document.createElement("div");
+        line.className = "line";
+
+        const r1 = fromEl.getBoundingClientRect();
+        const r2 = toEl.getBoundingClientRect();
+        const rb = board.getBoundingClientRect();
+
+        const x1 = r1.right - rb.left;
+        const y1 = r1.top + r1.height/2 - rb.top;
+        const x2 = r2.left - rb.left;
+        const y2 = r2.top + r2.height/2 - rb.top;
+
+        const length = Math.hypot(x2-x1, y2-y1);
+        const angle = Math.atan2(y2-y1, x2-x1)*180/Math.PI;
+
+        line.style.width = length + "px";
+        line.style.left = x1 + "px";
+        line.style.top = y1 + "px";
+        line.style.transform = `rotate(${angle}deg)`;
+
+        board.appendChild(line);
+      });
+    });
+  }
+
+  function render() {
+    const board = document.getElementById(boardId);
+    board.innerHTML = "";
+
+    const colMap = { A:[], B:[], C:[], D:[], E:[] };
+
+    squares.forEach(s => colMap[s.col].push(s));
+
+    columns.forEach(col => {
+      const colDiv = document.createElement("div");
+      colDiv.className = "column col" + col;
+
+      colMap[col].forEach(sq => {
+        const div = document.createElement("div");
+        div.className = "square";
+        div.id = boardId + sq.id;
+
+        if (marked.has(sq.id)) div.classList.add("marked");
+        else if (isAvailable(sq)) div.classList.add("available");
+
+        div.innerText = sq.label;
+        div.onclick = () => clickSquare(sq.id);
+
+        colDiv.appendChild(div);
+      });
+
+      board.appendChild(colDiv);
+    });
+
+    drawLines(board);
+  }
+
+  render();
+}
+
+// INIT BOTH
+createGame("boardAway");
+createGame("boardHome");
+
+</script>
+
+</body>
+</html>
